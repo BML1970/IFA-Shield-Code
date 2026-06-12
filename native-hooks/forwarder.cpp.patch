@@ -1,0 +1,23 @@
+--- daemon/fw/forwarder.cpp.orig	2021-03-10 12:00:00.000000000 +0100
++++ daemon/fw/forwarder.cpp	2026-06-09 10:00:00.000000000 +0100
+@@ -21,6 +21,7 @@
+  * See AUTHORS.md for complete list of NFD authors and contributors.
+  */
+ 
++#include "fw/ifashield-feature-hook.hpp"
+ #include "forwarder.hpp"
+ #include "algorithm.hpp"
+ #include "strategy.hpp"
+@@ -201,6 +202,12 @@
+ void
+ Forwarder::onIncomingInterest(const FaceEndpoint& ingress, const Interest& interest)
+ {
++  // -------------------------------------------------------------
++  // FL-IFAshield NATIVE REGISTER ENTRY POINT HOOK
++  // -------------------------------------------------------------
++  nfd::ifashield::FeatureGatheringHook::getInstance().recordIncomingInterest(interest.getName());
++  // -------------------------------------------------------------
++
+   NFD_LOG_DEBUG("onIncomingInterest face=" << ingress.face.getId() << " interest=" << interest.getName());
+ 
+   if (interest.getName().size() > Name::MAX_DEPTH) {

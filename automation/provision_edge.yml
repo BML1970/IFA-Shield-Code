@@ -1,0 +1,59 @@
+---
+- name: Provision FL-IFAshield Flight Components onto ARMv8 Edge Routers
+  hosts: all
+  remote_user: root
+  gather_facts: no
+  vars:
+    nfd_version: "0.7.1"
+    python_version: "3.8.10"
+
+  tasks:
+    - name: Update Yocto Linux package management registers
+      raw: opkg update && opkg upgrade
+      changed_when: true
+
+    - name: Ensure baseline framework dependencies are resident in image
+      raw: opkg install python3-core python3-pip python3-numpy gcc-sym linkage-hooks cmake
+      changed_when: true
+
+    - name: Deploy customized stateful NFD forwarding core binaries
+      copy:
+        src: "./binaries/nfd-{{ nfd_version }}-stateful-hooks"
+        dest: "/usr/bin/nfd"
+        mode: '0755'
+
+    - name: Provision default operational PIT sizing configurations
+      copy:
+        content: |
+          general {
+            user root
+            group root
+          }
+          tables {
+            pit_max_capacity 10000
+            pit_entry_lifetime 4.0
+            pit_replacement_policy lru
+            cs_max_capacity 2000
+          }
+        dest: /etc/ndn/nfd.conf
+        mode: '0644'
+
+    - name: Push down serialized ML optimization libraries via Python pip
+      raw: pip3 install torch==1.9.0 -f https://download.pytorch.org/whl/torch_stable.html && pip3 install scikit-learn-micro
+
+    - name: Scaffold internal framework micro-service telemetry directories
+      raw: mkdir -p /opt/ifashield/models /var/log/ndn/
+
+    - name: Stage execution runtime code artifacts
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+      with_items:
+        - { src: "./src/local_pipeline.py", dest: "/opt/ifashield/local_pipeline.py", mode: "0755" }
+        - { src: "./src/mitigation_engine.py", dest: "/opt/ifashield/mitigation_engine.py", mode: "0755" }
+
+    - name: Instantiate FL-IFAshield state-machine as a persistent system daemon
+      raw: |
+        nohup python3 /opt/ifashield/local_pipeline.py --epoch-interval 60 --local-epochs 3 > /var/log/ndn/ifashield_runtime.log 2>&1 &
+      changed_when: true
